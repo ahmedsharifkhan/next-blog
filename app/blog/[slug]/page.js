@@ -1,31 +1,43 @@
-import { getPage, getBlocks } from '../../../lib/notion';
+import fs from 'fs';
+import path from 'path';
+import matter from 'gray-matter';
+import { remark } from 'remark';
+import html from 'remark-html';
 
+// Function to get the content of a single post
+const getPost = async (slug) => {
+  const filePath = path.join('posts', `${slug}.md`);
+  const markdownWithMeta = fs.readFileSync(filePath, 'utf-8');
+  const { data: frontMatter, content } = matter(markdownWithMeta);
+
+  const processedContent = await remark().use(html).process(content);
+  const contentHtml = processedContent.toString();
+
+  return {
+    frontMatter,
+    contentHtml,
+  };
+};
+
+// Function to generate static params for dynamic routes
+export async function generateStaticParams() {
+  const files = fs.readdirSync(path.join('posts'));
+
+  return files.map((filename) => ({
+    slug: filename.replace('.md', ''),
+  }));
+}
+
+// Component to render a single post
 export default async function Post({ params }) {
-  const { id } = params;
-  const page = await getPage(id);
-  const blocks = await getBlocks(id);
+  const { slug } = params;
+  const { frontMatter, contentHtml } = await getPost(slug);
 
   return (
     <div>
-      <h1>{page.properties.Name.title[0].text.content}</h1>
-      <div>
-        {blocks.map((block) => {
-          switch (block.type) {
-            case 'paragraph':
-              return <p key={block.id}>{block.paragraph.text[0].text.content}</p>;
-            case 'heading_1':
-              return <h1 key={block.id}>{block.heading_1.text[0].text.content}</h1>;
-            case 'heading_2':
-              return <h2 key={block.id}>{block.heading_2.text[0].text.content}</h2>;
-            case 'heading_3':
-              return <h3 key={block.id}>{block.heading_3.text[0].text.content}</h3>;
-            case 'bulleted_list_item':
-              return <li key={block.id}>{block.bulleted_list_item.text[0].text.content}</li>;
-            default:
-              return null;
-          }
-        })}
-      </div>
+      <h1>{frontMatter.title}</h1>
+      <p>{frontMatter.date}</p>
+      <div dangerouslySetInnerHTML={{ __html: contentHtml }}></div>
     </div>
   );
 }
